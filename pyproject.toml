@@ -1,0 +1,13 @@
+[project]
+name = "token_distillation_repo"
+version = "1.0.0"
+description = "Awesome embedding initialization."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["token_distillation"]
+
+[tool.uv.sources]
+token_distillation = [{ path = "token_distillation/", editable = true }]
+
+[tool.ruff]
+line-length = 128

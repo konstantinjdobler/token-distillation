@@ -1,0 +1,43 @@
+[project]
+name = "token_distillation"
+version = "1.0.0"
+description = "Awesome embedding initialization."
+authors = [{ name = "Konstantin Dobler", email = "konstantin.dobler@hpi.de" }]
+requires-python = ">=3.11"
+dependencies = [
+    "datasets>=4.0.0",
+    "numpy>=1.26.3",
+    "tqdm>=4.64.1",
+    "transformers>=4.41.2",
+    "fire>=0.6.0",
+    "ahocorasick-rs>=0.22.0",
+    "torch>=2.3.1",
+    "sentencepiece>=0.2.0",
+    "accelerate>=0.30.1",
+    "huggingface-hub[cli]>=0.28.1",
+]
+
+# [tool.uv]
+# environments = ["sys_platform == 'linux'"]  # force linux if cross-building
+# no-build-isolation-package = ["flash-attn"]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128", marker = "sys_platform == 'linux'" }]
+
+[tool.ruff]
+line-length = 128
+
+[tool.uv]
+package = true
+
+[tool.uv.build-backend]
+module-root = ""
+
+[build-system]
+requires = ["uv_build>=0.9.6,<0.10.0"]
+build-backend = "uv_build"
