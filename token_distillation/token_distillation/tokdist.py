@@ -30,6 +30,8 @@ DATASET_ROOT = os.getenv("XDG_CACHE_HOME", os.path.expanduser("~/.cache")) + "/t
 # -----------------------------------------------------------------------------
 @dataclass
 class GeneratedDataSource:
+    """Configuration for collecting snippets via generation from the target model."""
+
     seed: int = 42
 
 
@@ -328,6 +330,11 @@ class TokenDistillation:
         device: str | None = "cuda:0",
         attn_impl: str | None = "sdpa",
     ) -> None:
+        if not torch.cuda.is_available():
+            raise RuntimeError("TokenDistillation requires CUDA, but no CUDA device is available.")
+        if device is None or not str(device).startswith("cuda"):
+            raise ValueError(f"TokenDistillation requires a CUDA device string, got {device!r}.")
+
         self.model_path = model_path
         self.device = device
         self.attn_impl = attn_impl
@@ -436,12 +443,14 @@ class TokenDistillation:
         tokenizer = AutoTokenizer.from_pretrained(out_path)
 
         # 5) Train
-        phrase_to_new_id = {phrase_ids: i + len(self.source_tokenizer) for i, phrase_ids in enumerate(new_phrases_ids)}
+        assigned_new_phrases: list[tuple[int, ...]] = [tuple(phrase_ids.tolist()) for phrase_ids in new_phrases_ids]
+        phrase_to_new_id = {phrase: i + len(self.source_tokenizer) for i, phrase in enumerate(assigned_new_phrases)}
         model = train_embeddings(
             model,
             new_phrases_snippets_ids,
             phrase_to_new_id,
-            tokenizer,
+            assigned_new_phrases=assigned_new_phrases,
+            tokenizer=tokenizer,
             epochs=training.epochs,
             batch_size=training.batch_size,
             loss_methods=list(training.loss_methods),
@@ -464,7 +473,7 @@ class TokenDistillation:
                 )
                 print("[tokdist] New output embeddings set to zero.")
             elif output_emb_policy == OutputEmbeddingInit.SUBTOKEN_MEAN:
-                out_map = self._compute_subtoken_means(todo_tokens)
+                out_map = self._compute_subtoken_means(todo_tokens, input_or_output="output")
                 out_w = model.get_output_embeddings().weight.data
                 for tok, emb in out_map.items():
                     tok_id = tokenizer.convert_tokens_to_ids(tok)

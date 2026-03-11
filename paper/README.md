@@ -1,10 +1,10 @@
 # Token Distillation - Attention-aware New Input Embeddings
 
-This folder contains the code used in our preprint "Token Distillation: Attention-aware Input Embeddings for New Tokens". This preprint is an update to a previously released preprint, which was titled "AweDist: Attention-aware Embedding Distillation for New Input Token Embeddings".
+This folder contains the code used in our ICLR 2026 paper "Token Distillation: Attention-aware Input Embeddings for New Tokens". This preprint is an update to a previously released preprint, which was titled "AweDist: Attention-aware Embedding Distillation for New Input Token Embeddings".
 
-Paper on arXiv: https://arxiv.org/abs/2505.20133. 
+Paper on arXiv: https://arxiv.org/abs/2505.20133.
 
-![Token Distillation method illustration](assets/token-distillation.png)
+![Token Distillation method illustration](../assets/token-distillation.png)
 
 ## Setup
 
@@ -34,17 +34,16 @@ For further parameters, such as the `target_layer` and different `loss_method` a
 ## Citation
 
 ```bibtex
-@misc{dobler2025tokendistillation,
-    title={Token Distillation: Attention-aware Input Embeddings for New Tokens},
+@inproceedings{dobler2026token,
+    title={Token Distillation: Attention-Aware Input Embeddings for New Tokens},
     author={Konstantin Dobler and Desmond Elliott and Gerard de Melo},
-    year={2025},
-    eprint={2505.20133},
-    archivePrefix={arXiv},
-    primaryClass={cs.CL}
+    booktitle={The Fourteenth International Conference on Learning Representations},
+    year={2026},
+    url={https://openreview.net/forum?id=n20ml5nGEo}
 }
 ```
 
 ## Acknowledgements
 
-We thank the German Federal Ministry for Education and Research (BMBF) for their compute grant through the project "KI-Servicezentrum Berlin Brandenburg"(01IS22092). Konstantin Dobler further thanks the European Laboratory for Learning and Intelligent Systems (ELLIS) PhD program for support.
+We thank the German Federal Ministry of Research, Technology and Space for their support through the project «KI-Servicezentrum Berlin Brandenburg» (16IS22092). Konstantin Dobler further thanks the European Laboratory for Learning and Intelligent Systems (ELLIS) PhD program for support.
 The research was supported by a research grant (VIL53122) from VILLUM FONDEN, and by the European Union’s Horizon 2020 research and innovation program under grant agreement No. 101135671 (TrustLLM).

@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  push:
+    paths:
+      - ".github/workflows/tests.yml"
+      - "token_distillation/**"
+  pull_request:
+    paths:
+      - ".github/workflows/tests.yml"
+      - "token_distillation/**"
+
+jobs:
+  package-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Run unit tests
+        working-directory: token_distillation
+        run: uv run --extra dev pytest tests/test_unit_helpers.py

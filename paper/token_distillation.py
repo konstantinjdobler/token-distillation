@@ -22,7 +22,10 @@ class TextDataset(Dataset):
 
 
 def transform_input_token_format(
-    tokenized_texts: list[list[list[int]]], new_phrase_to_new_id: dict[list[int], int], pad_token_id: int
+    tokenized_texts: list[list[list[int]]],
+    new_phrase_to_new_id: dict[list[int], int],
+    pad_token_id: int,
+    new_phrase_to_texts: list[torch.Tensor] = None,
 ):
     """
     Transform tokenized texts by merging sequences that match new phrases into single tokens.
@@ -31,17 +34,33 @@ def transform_input_token_format(
         tokenized_texts: List of tokenized text batches.
         new_phrase_to_new_id: Mapping from phrase token sequences to new merged token IDs.
         pad_token_id: Token ID to use for padding.
+        new_phrase_to_texts: Optional list of phrases aligned with `tokenized_texts`. If provided,
+            only this phrase is merged within each outer sequence group.
 
     Returns:
         list: Transformed texts with merged sequences and alignment masks.
     """
     merged_texts = []
     maximum_new_phrase_len = max(len(phrase) for phrase in new_phrase_to_new_id.keys())
+    new_phrase_tuple_to_new_id = {tuple(phrase.tolist()): new_id for phrase, new_id in new_phrase_to_new_id.items()}
     new_phrase_per_len_to_new_id = [
         {tuple(phrase.tolist()): new_id for phrase, new_id in new_phrase_to_new_id.items() if len(phrase) == i}
         for i in range(maximum_new_phrase_len + 1)
     ]
-    for texts in tqdm(tokenized_texts):
+    if new_phrase_to_texts is not None:
+        assert len(new_phrase_to_texts) == len(tokenized_texts), (
+            "When provided, new_phrase_to_texts must align with tokenized_texts outer dimension."
+        )
+    for new_phrase_idx, texts in tqdm(enumerate(tokenized_texts), total=len(tokenized_texts)):
+        selected_new_phrase = None
+        selected_new_phrase_len = None
+        selected_new_phrase_id = None
+        if new_phrase_to_texts is not None:
+            selected_new_phrase = tuple(new_phrase_to_texts[new_phrase_idx].tolist())
+            selected_new_phrase_len = len(selected_new_phrase)
+            if selected_new_phrase not in new_phrase_tuple_to_new_id:
+                raise ValueError(f"Selected phrase at idx={new_phrase_idx} is not part of new_phrase_to_new_id.")
+            selected_new_phrase_id = new_phrase_tuple_to_new_id[selected_new_phrase]
         for text in tqdm(texts, leave=False):
             # print(text)
             text = text.tolist()
@@ -50,20 +69,33 @@ def transform_input_token_format(
             unmerged_to_merged_mask = [None] * len(text)
             old_len = len(text)
             while i < len(text):
-                for new_phrase_len in range(maximum_new_phrase_len, 0, -1):
-                    potential_new_phrase = tuple(text[i : i + new_phrase_len])
-                    if potential_new_phrase in new_phrase_per_len_to_new_id[new_phrase_len]:
-                        # merged phrase starting at position i found (of length new_phrase_len)
-                        current_text.append(new_phrase_per_len_to_new_id[new_phrase_len][potential_new_phrase])
-                        unmerged_to_merged_mask[i : i + new_phrase_len] = [0] * new_phrase_len
-                        unmerged_to_merged_mask[i + new_phrase_len - 1] = 1  # last token of the phrase
-                        i += new_phrase_len
-                        break
+                if new_phrase_to_texts is not None:
+                    potential_new_phrase = tuple(text[i : i + selected_new_phrase_len])
+                    if potential_new_phrase == selected_new_phrase:
+                        current_text.append(selected_new_phrase_id)
+                        unmerged_to_merged_mask[i : i + selected_new_phrase_len] = [0] * selected_new_phrase_len
+                        unmerged_to_merged_mask[i + selected_new_phrase_len - 1] = 1  # last token of the phrase
+                        i += selected_new_phrase_len
+                    else:
+                        # no merged phrase starting at position i found
+                        current_text.append(text[i])
+                        unmerged_to_merged_mask[i] = 1
+                        i += 1
                 else:
-                    # no merged phrase starting at position i found
-                    current_text.append(text[i])
-                    unmerged_to_merged_mask[i] = 1
-                    i += 1
+                    for new_phrase_len in range(maximum_new_phrase_len, 0, -1):
+                        potential_new_phrase = tuple(text[i : i + new_phrase_len])
+                        if potential_new_phrase in new_phrase_per_len_to_new_id[new_phrase_len]:
+                            # merged phrase starting at position i found (of length new_phrase_len)
+                            current_text.append(new_phrase_per_len_to_new_id[new_phrase_len][potential_new_phrase])
+                            unmerged_to_merged_mask[i : i + new_phrase_len] = [0] * new_phrase_len
+                            unmerged_to_merged_mask[i + new_phrase_len - 1] = 1  # last token of the phrase
+                            i += new_phrase_len
+                            break
+                    else:
+                        # no merged phrase starting at position i found
+                        current_text.append(text[i])
+                        unmerged_to_merged_mask[i] = 1
+                        i += 1
 
             assert all(i is not None for i in unmerged_to_merged_mask), "Some tokens were not assigned a mask"
             assert sum(unmerged_to_merged_mask) == len(current_text), "The mask is not the same length as the text"
@@ -89,6 +121,8 @@ def train_embeddings(
     original_token_ids=None,
     target_layer=-1,
     mixed_precision=False,
+    single_new_token_per_sequence=False,
+    new_phrase_to_texts=None,
 ):
     """
     Train embeddings for new tokens using token distillation.
@@ -111,6 +145,10 @@ def train_embeddings(
         original_token_ids (list, optional): IDs of original tokens to preserve. Defaults to None.
         target_layer (int): Target layer for hidden state distillation. Defaults to -1.
         mixed_precision (bool): Whether to use mixed precision training. Defaults to False.
+        single_new_token_per_sequence (bool): If True, only merge one designated new phrase
+            per outer sequence group in `tokenized_texts`. Defaults to False.
+        new_phrase_to_texts (list[torch.Tensor], optional): Phrases aligned with `tokenized_texts`
+            outer dimension. Only used when `single_new_token_per_sequence=True`.
 
     Returns:
         PreTrainedModel: The trained model.
@@ -133,7 +171,16 @@ def train_embeddings(
             or tokenizer.eos_token_id
         )
         assert tokenizer.pad_token_id is not None, "Tokenizer must have a pad token"
-    dataset = TextDataset(transform_input_token_format(tokenized_texts, new_phrase_to_new_id, tokenizer.pad_token_id))
+    if single_new_token_per_sequence and new_phrase_to_texts is None:
+        new_phrase_to_texts = list(new_phrase_to_new_id.keys())
+    dataset = TextDataset(
+        transform_input_token_format(
+            tokenized_texts,
+            new_phrase_to_new_id,
+            tokenizer.pad_token_id,
+            new_phrase_to_texts=new_phrase_to_texts if single_new_token_per_sequence else None,
+        )
+    )
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=4, drop_last=True)
 
     # don't train the model

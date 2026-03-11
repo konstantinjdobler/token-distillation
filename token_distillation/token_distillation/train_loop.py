@@ -1,4 +1,5 @@
 import time
+from typing import Sequence
 
 import torch
 from torch.optim import AdamW
@@ -7,6 +8,10 @@ from tqdm import tqdm
 from transformers import get_scheduler
 
 from .utils import seed_everything
+
+TokenLike = Sequence[int] | torch.Tensor
+PhraseKey = tuple[int, ...]
+GroupedTokenizedTexts = Sequence[Sequence[TokenLike]]
 
 
 class TextDataset(Dataset):
@@ -22,58 +27,80 @@ class TextDataset(Dataset):
         return {k: v for k, v in self.tokenized_texts[idx].items()}
 
 
+def _to_int_list(values: TokenLike) -> list[int]:
+    """Normalize token containers (tensor/list/tuple) to a Python list of ints."""
+    if isinstance(values, torch.Tensor):
+        return values.tolist()
+    return list(values)
+
 def transform_input_token_format(
-    tokenized_texts: list[list[list[int]]], new_phrase_to_new_id: dict[list[int], int], pad_token_id: int
+    tokenized_texts: GroupedTokenizedTexts,
+    new_phrase_to_new_id: dict[PhraseKey, int],
+    pad_token_id: int,
+    assigned_new_phrases: Sequence[TokenLike],
 ):
     """
-    Transform tokenized texts by merging sequences that match new phrases into single tokens.
+    Transform tokenized texts by merging only each group's assigned phrase into a single token.
 
     Args:
         tokenized_texts: List of tokenized text batches.
         new_phrase_to_new_id: Mapping from phrase token sequences to new merged token IDs.
+            Keys must be tuples to ensure deterministic lookup.
         pad_token_id: Token ID to use for padding.
+        assigned_new_phrases: List aligned with the outer dimension of tokenized_texts.
+            Only the assigned phrase for each group will be merged (all other phrases are ignored).
 
     Returns:
         list: Transformed texts with merged sequences and alignment masks.
     """
     merged_texts = []
-    maximum_new_phrase_len = max(len(phrase) for phrase in new_phrase_to_new_id.keys())
-    new_phrase_per_len_to_new_id = [
-        {tuple(phrase.tolist()): new_id for phrase, new_id in new_phrase_to_new_id.items() if len(phrase) == i}
-        for i in range(maximum_new_phrase_len + 1)
-    ]
-    for texts in tqdm(tokenized_texts):
+    if len(assigned_new_phrases) != len(tokenized_texts):
+        raise ValueError("assigned_new_phrases must match the outer length of tokenized_texts")
+
+    for texts, assigned_phrase in tqdm(zip(tokenized_texts, assigned_new_phrases), total=len(tokenized_texts)):
+        assigned_phrase_key = tuple(_to_int_list(assigned_phrase))
+        if assigned_phrase_key not in new_phrase_to_new_id:
+            raise KeyError(f"Assigned phrase not found in new_phrase_to_new_id: {assigned_phrase_key}")
+        assigned_new_id = new_phrase_to_new_id[assigned_phrase_key]
+        assigned_len = len(assigned_phrase_key)
+
         for text in tqdm(texts, leave=False):
-            # print(text)
-            text = text.tolist()
+            text = _to_int_list(text)
             i = 0
             current_text = []
             unmerged_to_merged_mask = [None] * len(text)
             old_len = len(text)
             while i < len(text):
-                for new_phrase_len in range(maximum_new_phrase_len, 0, -1):
-                    potential_new_phrase = tuple(text[i : i + new_phrase_len])
-                    if potential_new_phrase in new_phrase_per_len_to_new_id[new_phrase_len]:
-                        # merged phrase starting at position i found (of length new_phrase_len)
-                        current_text.append(new_phrase_per_len_to_new_id[new_phrase_len][potential_new_phrase])
-                        unmerged_to_merged_mask[i : i + new_phrase_len] = [0] * new_phrase_len
-                        unmerged_to_merged_mask[i + new_phrase_len - 1] = 1  # last token of the phrase
-                        i += new_phrase_len
-                        break
+                if i + assigned_len <= len(text) and tuple(text[i : i + assigned_len]) == assigned_phrase_key:
+                    # merged assigned phrase starting at position i
+                    current_text.append(assigned_new_id)
+                    unmerged_to_merged_mask[i : i + assigned_len] = [0] * assigned_len
+                    unmerged_to_merged_mask[i + assigned_len - 1] = 1
+                    i += assigned_len
                 else:
-                    # no merged phrase starting at position i found
                     current_text.append(text[i])
                     unmerged_to_merged_mask[i] = 1
                     i += 1
 
-            assert all(i is not None for i in unmerged_to_merged_mask), "Some tokens were not assigned a mask"
-            assert sum(unmerged_to_merged_mask) == len(current_text), "The mask is not the same length as the text"
+            if any(mask_value is None for mask_value in unmerged_to_merged_mask):
+                raise RuntimeError("Some tokens were not assigned a mask.")
+            if sum(unmerged_to_merged_mask) != len(current_text):
+                raise RuntimeError("The mask is not the same length as the text.")
             current_text += [pad_token_id] * (old_len - len(current_text))
             merged_texts.append(
                 {"merged_seq": current_text, "original_seq": text, "unmerged_to_merged_mask": unmerged_to_merged_mask}
             )
 
     return merged_texts
+
+
+def _next_token_ce_loss(logits: torch.Tensor, targets: torch.Tensor, pad_token_id: int) -> torch.Tensor:
+    """Compute next-token CE for autoregressive logits/targets with padding ignored."""
+    return torch.nn.functional.cross_entropy(
+        logits.reshape(-1, logits.size(-1)),
+        targets.reshape(-1),
+        ignore_index=pad_token_id,
+    )
 
 
 def collate_fn(batch, pad_id=None):
@@ -115,8 +142,9 @@ def collate_fn(batch, pad_id=None):
 
 def train_embeddings(
     model,
-    tokenized_texts,
-    new_phrase_to_new_id,
+    tokenized_texts: GroupedTokenizedTexts,
+    new_phrase_to_new_id: dict[PhraseKey, int],
+    assigned_new_phrases: Sequence[TokenLike],
     tokenizer,
     epochs=1,
     batch_size=1,
@@ -138,8 +166,11 @@ def train_embeddings(
 
     Args:
         model: The model to train (PreTrainedModel).
-        tokenized_texts: List of batches of tokenized text sequences.
+        tokenized_texts: List of batches of tokenized text sequences, grouped by new phrase
+            (one group per new phrase). Each group is assigned to that phrase and only that
+            phrase will be merged in its samples.
         new_phrase_to_new_id: Mapping from phrase token sequences to new merged token IDs.
+        assigned_new_phrases: List of phrase token sequences aligned with tokenized_texts outer dimension.
         tokenizer: Tokenizer used for pad/eos ids and vocab size information.
         epochs (int): Number of training epochs. Default: 1.
         batch_size (int): Training batch size. Default: 1.
@@ -162,12 +193,14 @@ def train_embeddings(
     seed_everything(seed)
     if loss_methods is None:
         loss_methods = ["MSE-on-hiddens"]
-    VALID_LOSS_METHODS = ["MSE-on-hiddens", "MSE-on-logits", "KL-on-logits", "CE", "CE-auto-weighted"]
+    valid_loss_methods = ["MSE-on-hiddens", "MSE-on-logits", "KL-on-logits", "CE", "CE-auto-weighted"]
     if "CE-auto-weighted" in loss_methods:
-        assert "MSE-on-hiddens" in loss_methods or "MSE-on-logits" in loss_methods or "KL-on-logits" in loss_methods, (
-            "CE-auto-weighted requires one of MSE-on-hiddens, MSE-on-logits, or KL-on-logits"
-        )
-    assert all(i in VALID_LOSS_METHODS for i in loss_methods), f"Invalid loss methods: {loss_methods}"
+        if not (
+            "MSE-on-hiddens" in loss_methods or "MSE-on-logits" in loss_methods or "KL-on-logits" in loss_methods
+        ):
+            raise ValueError("CE-auto-weighted requires one of MSE-on-hiddens, MSE-on-logits, or KL-on-logits")
+    if not all(method in valid_loss_methods for method in loss_methods):
+        raise ValueError(f"Invalid loss methods: {loss_methods}")
     if tokenizer.pad_token_id is None:
         if tokenizer.get_vocab().get("<|finetune_right_pad_id|>") is not None:
             tokenizer.pad_token_id = tokenizer.get_vocab().get("<|finetune_right_pad_id|>")
@@ -177,8 +210,23 @@ def train_embeddings(
             tokenizer.pad_token_id = tokenizer.eos_token_id
             print(f"Setting pad token id to eos token id: {tokenizer.eos_token_id} | {tokenizer.eos_token}")
 
-        assert tokenizer.pad_token_id is not None, "Tokenizer must have a pad token"
-    dataset = TextDataset(transform_input_token_format(tokenized_texts, new_phrase_to_new_id, tokenizer.pad_token_id))
+        if tokenizer.pad_token_id is None:
+            raise RuntimeError("Tokenizer must have a pad token")
+    if not tokenized_texts or not isinstance(tokenized_texts[0], (list, tuple)):
+        raise ValueError("tokenized_texts must be grouped by new phrase (list of lists).")
+    if len(tokenized_texts) != len(new_phrase_to_new_id):
+        raise ValueError("tokenized_texts outer length must match new_phrase_to_new_id.")
+    if len(assigned_new_phrases) != len(tokenized_texts):
+        raise ValueError("assigned_new_phrases outer length must match tokenized_texts.")
+
+    dataset = TextDataset(
+        transform_input_token_format(
+            tokenized_texts,
+            new_phrase_to_new_id,
+            tokenizer.pad_token_id,
+            assigned_new_phrases=assigned_new_phrases,
+        )
+    )
 
     dataloader = DataLoader(
         dataset,
@@ -258,10 +306,12 @@ def train_embeddings(
                 token_distillation_logits = token_distillation_logits[merged_seq != tokenizer.pad_token_id]
                 og_logits = og_logits[unmerged_to_merged_mask == 1]
 
-                assert len(token_distillation_logits.shape) == 2, "token_distillation_logits should be 2D"
-                assert len(og_logits.shape) == 2, "og_logits should be 2D"
+                if len(token_distillation_logits.shape) != 2:
+                    raise RuntimeError("token_distillation_logits should be 2D")
+                if len(og_logits.shape) != 2:
+                    raise RuntimeError("og_logits should be 2D")
 
-                # only caluclate loss on logits for og vocabulary
+                # only calculate loss on logits for original vocabulary
                 token_distillation_logits = token_distillation_logits[:, original_token_ids]
                 og_logits = og_logits[:, original_token_ids]
 
@@ -278,9 +328,7 @@ def train_embeddings(
                 token_distillation_logits = merged_out["logits"].float()
                 targets = merged_seq[:, 1:]
                 logits = token_distillation_logits[:, :-1]
-                ce_loss = torch.nn.functional.cross_entropy(
-                    logits.reshape(-1, logits.size(-1)), targets.reshape(-1), ignore_index=tokenizer.pad_token_id
-                )
+                ce_loss = _next_token_ce_loss(logits, targets, tokenizer.pad_token_id)
                 if "CE" in loss_methods:
                     loss = loss + ce_loss
                 if "CE-auto-weighted" in loss_methods:
@@ -292,9 +340,7 @@ def train_embeddings(
                 token_distillation_logits = merged_out["logits"].float()
                 targets = merged_seq[:, 1:]
                 logits = token_distillation_logits[:, :-1]
-                ce_loss = torch.nn.functional.cross_entropy(
-                    logits.reshape(-1, logits.size(-1)), targets.reshape(-1), ignore_index=tokenizer.pad_token_id
-                )
+                ce_loss = _next_token_ce_loss(logits, targets, tokenizer.pad_token_id)
                 torch.autograd.backward(
                     [ce_loss],
                     inputs=[model.get_output_embeddings().weight],
@@ -319,21 +365,24 @@ def train_embeddings(
             avg_loss = sum(running_window_losses) / len(running_window_losses)
             epoch_bar.set_description(f"Epoch: {epoch}, Loss: {loss.item()}, Running Loss: {avg_loss}")
 
-            if len(running_window_losses) == int(len(dataloader) * 0.1) or len(running_window_losses) == 0:
+            if len(running_window_losses) == int(len(dataloader) * 0.1):
                 running_window_losses = []
                 print(f"Epoch: {epoch}, Step: {step_idx}, Loss: {loss.item()}, Running Loss: {avg_loss}")
 
     if preserve_original_embeddings:
-        assert torch.equal(
+        if not torch.equal(
             model.get_input_embeddings().weight.data[original_token_ids], original_input_embs[original_token_ids]
-        ), "The original input embeddings have changed."
-        assert torch.equal(
+        ):
+            raise RuntimeError("The original input embeddings have changed.")
+        if not torch.equal(
             model.get_output_embeddings().weight.data[original_token_ids], original_output_embs[original_token_ids]
-        ), "The original ouptut embeddings have changed."
+        ):
+            raise RuntimeError("The original output embeddings have changed.")
     else:
-        assert not torch.equal(
-            model.get_input_embeddings().weight.data[original_token_ids], original_input_embs[original_token_ids]
-        ), "The original input embeddings have not changed! This is unexpected if `preserve_og_embs` is False."
+        if torch.equal(model.get_input_embeddings().weight.data[original_token_ids], original_input_embs[original_token_ids]):
+            raise RuntimeError(
+                "The original input embeddings have not changed. This is unexpected if `preserve_original_embeddings` is False."
+            )
 
     t_end = time.perf_counter()
     print(f"Total end-to-end time: {t_end - t0}")

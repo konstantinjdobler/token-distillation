@@ -5,21 +5,21 @@ import time
 from functools import partial
 from typing import Literal
 
-import clm
 import torch
-from ahocorasick import collect_snippets_with_patterns_from_dataset, map_int_seq_to_str
 from datasets import Dataset, load_dataset
 from fire import Fire
+from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoModelForMaskedLM, AutoTokenizer, PreTrainedModel
+
+import clm
+import token_distillation
+from ahocorasick import collect_snippets_with_patterns_from_dataset, map_int_seq_to_str
 from token_distillation_utils import (
     GPT_BPE_WHITESPACE,
     SPIECE_WHITESPACE,
     generate_samples_with_patterns,
     get_new_phrase_tokenized_ids,
 )
-from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoModelForMaskedLM, AutoTokenizer, PreTrainedModel
-
-import token_distillation
 
 DATASET_ROOT = os.getenv("XDG_CACHE_HOME", os.path.expanduser("~/.cache")) + "/tokenized_datasets"
 
@@ -93,6 +93,7 @@ def main(
     use_generated_snippets: bool = False,
     filter_by_dataset_occurrence: bool = True,
     mixed_precision: bool = True,
+    single_new_token_per_sequence: bool = False,
 ):
     """
     Main function for initializing embeddings for new tokens in a pretrained language model.
@@ -121,10 +122,12 @@ def main(
         use_generated_snippets (bool): Whether to use generated snippets. Defaults to False.
         filter_by_dataset_occurrence (bool): Whether to filter tokens by dataset occurrence. Defaults to True.
         mixed_precision (bool): Whether to use mixed precision training. Defaults to True.
+        single_new_token_per_sequence (bool): If True, restrict snippet merging/loss alignment to
+            one designated new token per sequence group. Prevents collapse when most tokens are new tokens. Defaults to False.
 
     Returns:
         None. Saves the extended model to the specified output path.
-    """  
+    """
     if init_method == "zett-post":
         # guard against running whole script on unsupported models for config
         from zett.transfer import valid_model_for_zett_transfer
@@ -526,6 +529,8 @@ def main(
             seed=seed,
             target_layer=target_layer,
             mixed_precision=mixed_precision,
+            single_new_token_per_sequence=single_new_token_per_sequence,
+            new_phrase_to_texts=new_phrases_ids,
         )
 
         if not model.config.tie_word_embeddings and set_output_to_zero_if_untied:

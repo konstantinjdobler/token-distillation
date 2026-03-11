@@ -23,7 +23,7 @@ Run end-to-end token distillation from the command line using our [example scrip
 ```bash
 python example.py \
     --model_path meta-llama/Llama-3.1-8B-Instruct \
-    --new_tokens " Krankenwagen, Schmetterling" \
+    --tokens " Krankenwagen, Schmetterling" \
     --out_path outputs/llama3.1-german \
     --dataset_path HuggingFaceFW/fineweb-2 \
     --dataset_name "deu_Latn" \
@@ -45,7 +45,7 @@ This command will:
 
 We provide an implementation of Token Distillation that can be installed as a python package in [`token_distillation/`](./token_distillation/).
 
-> ℹ️ A PyPI release is planned. Until then, you can just copy-paste the [`token_distillation/`](./token_distillation/) folder into your project and install from source (`pip install -e ./token_distillation` or as shown in our top-level [`pyproject.toml`](pyproject.toml)).
+> ℹ️ A PyPI release is planned. Until then, you can just copy-paste the [`token_distillation/`](./token_distillation/) folder into your project and install from source (`pip install -e ./token_distillation` or with `uv` as shown in our top-level [`pyproject.toml`](pyproject.toml)).
 
 First, create the `TokenDistillation` class:
 
@@ -63,7 +63,7 @@ from token_distillation import GeneratedDataSource
 model, tokenizer = tokdist.run(
         new_tokens=[" Krankenwagen", " Schmetterling"],
         data=GeneratedDataSource(seed=42),
-        out_path="outputs/llama3.1-german"
+        out_path="outputs/llama3.1-german",
         save=True # `save=True` saves the model & tokenizer in `out_path`
 )
 ```
@@ -127,16 +127,15 @@ The code used in the preprint lives under [`paper/`](paper/). Please consult the
 ## Citation
 
 ```bibtex
-@misc{dobler2025tokendistillation,
-    title        = {Token Distillation: Attention-aware Input Embeddings for New Tokens},
-    author       = {Konstantin Dobler and Desmond Elliott and Gerard de Melo},
-    year         = {2025},
-    eprint       = {2505.20133},
-    archivePrefix= {arXiv},
-    primaryClass = {cs.CL}
+@inproceedings{dobler2026token,
+    title={Token Distillation: Attention-Aware Input Embeddings for New Tokens},
+    author={Konstantin Dobler and Desmond Elliott and Gerard de Melo},
+    booktitle={The Fourteenth International Conference on Learning Representations},
+    year={2026},
+    url={https://openreview.net/forum?id=n20ml5nGEo}
 }
 ```
 
 ## Acknowledgements
 
-We thank the German Federal Ministry for Education and Research (BMBF) for their compute grant through the project “KI-Servicezentrum Berlin Brandenburg” (01IS22092). Konstantin Dobler further thanks the European Laboratory for Learning and Intelligent Systems (ELLIS) PhD program for support. The research was supported by a research grant (VIL53122) from VILLUM FONDEN, and by the European Union’s Horizon 2020 research and innovation program under grant agreement No. 101135671 (TrustLLM).
+We thank the German Federal Ministry of Research, Technology and Space for their support through the project «KI-Servicezentrum Berlin Brandenburg» (16IS22092). Konstantin Dobler further thanks the European Laboratory for Learning and Intelligent Systems (ELLIS) PhD program for support. The research was supported by a research grant (VIL53122) from VILLUM FONDEN, and by the European Union’s Horizon 2020 research and innovation program under grant agreement No. 101135671 (TrustLLM).

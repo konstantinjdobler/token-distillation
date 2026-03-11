@@ -1,0 +1,68 @@
+group: arabic_leaderboard_arabic_mmlu_light_abcd
+task:
+  - arabic_leaderboard_arabic_mmlu_abstract_algebra_light_abcd
+  - arabic_leaderboard_arabic_mmlu_anatomy_light_abcd
+  - arabic_leaderboard_arabic_mmlu_astronomy_light_abcd
+  - arabic_leaderboard_arabic_mmlu_business_ethics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_clinical_knowledge_light_abcd
+  - arabic_leaderboard_arabic_mmlu_college_biology_light_abcd
+  - arabic_leaderboard_arabic_mmlu_college_chemistry_light_abcd
+  - arabic_leaderboard_arabic_mmlu_college_computer_science_light_abcd
+  - arabic_leaderboard_arabic_mmlu_college_mathematics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_college_medicine_light_abcd
+  - arabic_leaderboard_arabic_mmlu_college_physics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_computer_security_light_abcd
+  - arabic_leaderboard_arabic_mmlu_conceptual_physics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_econometrics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_electrical_engineering_light_abcd
+  - arabic_leaderboard_arabic_mmlu_elementary_mathematics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_formal_logic_light_abcd
+  - arabic_leaderboard_arabic_mmlu_global_facts_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_biology_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_chemistry_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_computer_science_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_european_history_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_geography_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_government_and_politics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_macroeconomics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_mathematics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_microeconomics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_physics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_psychology_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_statistics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_us_history_light_abcd
+  - arabic_leaderboard_arabic_mmlu_high_school_world_history_light_abcd
+  - arabic_leaderboard_arabic_mmlu_human_aging_light_abcd
+  - arabic_leaderboard_arabic_mmlu_human_sexuality_light_abcd
+  - arabic_leaderboard_arabic_mmlu_international_law_light_abcd
+  - arabic_leaderboard_arabic_mmlu_jurisprudence_light_abcd
+  - arabic_leaderboard_arabic_mmlu_logical_fallacies_light_abcd
+  - arabic_leaderboard_arabic_mmlu_machine_learning_light_abcd
+  - arabic_leaderboard_arabic_mmlu_management_light_abcd
+  - arabic_leaderboard_arabic_mmlu_marketing_light_abcd
+  - arabic_leaderboard_arabic_mmlu_medical_genetics_light_abcd
+  - arabic_leaderboard_arabic_mmlu_miscellaneous_light_abcd
+  - arabic_leaderboard_arabic_mmlu_moral_disputes_light_abcd
+  - arabic_leaderboard_arabic_mmlu_moral_scenarios_light_abcd
+  - arabic_leaderboard_arabic_mmlu_nutrition_light_abcd
+  - arabic_leaderboard_arabic_mmlu_philosophy_light_abcd
+  - arabic_leaderboard_arabic_mmlu_prehistory_light_abcd
+  - arabic_leaderboard_arabic_mmlu_professional_accounting_light_abcd
+  - arabic_leaderboard_arabic_mmlu_professional_law_light_abcd
+  - arabic_leaderboard_arabic_mmlu_professional_medicine_light_abcd
+  - arabic_leaderboard_arabic_mmlu_professional_psychology_light_abcd
+  - arabic_leaderboard_arabic_mmlu_public_relations_light_abcd
+  - arabic_leaderboard_arabic_mmlu_security_studies_light_abcd
+  - arabic_leaderboard_arabic_mmlu_sociology_light_abcd
+  - arabic_leaderboard_arabic_mmlu_us_foreign_policy_light_abcd
+  - arabic_leaderboard_arabic_mmlu_virology_light_abcd
+  - arabic_leaderboard_arabic_mmlu_world_religions_light_abcd
+aggregate_metric_list:
+  - metric: acc
+    aggregation: mean
+    weight_by_size: true
+  - metric: acc_norm
+    aggregation: mean
+    weight_by_size: true
+metadata:
+  version: 1.0

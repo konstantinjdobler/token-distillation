@@ -1,7 +1,7 @@
 [project]
 name = "token_distillation_repo"
 version = "1.0.0"
-description = "Awesome embedding initialization."
+description = "Repository workspace for Token Distillation, including the reusable package and paper reproduction code."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["token_distillation"]

@@ -1,0 +1,25 @@
+group: arabic_leaderboard_light_abcd
+task:
+  - arabic_leaderboard_acva_light_abcd
+  - arabic_leaderboard_alghafa_light_abcd
+  - arabic_leaderboard_arabic_mmlu_light_abcd
+  - arabic_leaderboard_arabic_exams_light_abcd
+  - arabic_leaderboard_arabic_mt_arc_challenge_light_abcd
+  - arabic_leaderboard_arabic_mt_arc_easy_light_abcd
+  - arabic_leaderboard_arabic_mt_boolq_light_abcd
+  - arabic_leaderboard_arabic_mt_hellaswag_light_abcd
+  - arabic_leaderboard_arabic_mt_mmlu_light_abcd
+  - arabic_leaderboard_arabic_mt_copa_light_abcd
+  - arabic_leaderboard_arabic_mt_openbook_qa_light_abcd
+  - arabic_leaderboard_arabic_mt_piqa_light_abcd
+  - arabic_leaderboard_arabic_mt_race_light_abcd
+  - arabic_leaderboard_arabic_mt_toxigen_light_abcd
+aggregate_metric_list:
+  - metric: acc
+    aggregation: mean
+    weight_by_size: true
+  - metric: acc_norm
+    aggregation: mean
+    weight_by_size: true
+metadata:
+  version: 1.0
