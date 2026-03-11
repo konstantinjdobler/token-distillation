@@ -1,6 +1,6 @@
 # Token Distillation: Attention-aware Input Embeddings for New Tokens
 
-Official code release for the paper “Token Distillation: Attention-aware Input Embeddings for New Tokens” ([arXiv:2505.20133](https://arxiv.org/abs/2505.20133)).
+Official code release for our ICLR 2026 paper “Token Distillation: Attention-aware Input Embeddings for New Tokens” ([arXiv:2505.20133](https://arxiv.org/abs/2505.20133)).
 
 ![Token Distillation method illustration](assets/token-distillation.png)
 
